@@ -9,13 +9,13 @@
   # Product resource with fallbacks
   assign product_resource = product | default: section.settings.product
 
-  unless product_resource
+  if product_resource == blank
     assign product_resource = collection.products.first
-  endunless
+  endif
 
   if request.visual_preview_mode and product_resource == blank
     assign product_resource = collections.all.products.first
-  endunless
+  endif
 
   # Current variant
   assign current_variant = product_resource.selected_or_first_available_variant
@@ -50,14 +50,14 @@
   # Extract size guide from metafield or description
   assign size_guide_content = product_resource.metafields.custom.size_guide
 
-  unless size_guide_content
+  if size_guide_content == blank
     if product_resource.description contains 'SIZE GUIDE'
       assign desc_parts = product_resource.description | split: 'SIZE GUIDE'
       if desc_parts.size > 1
         assign size_guide_content = desc_parts[1] | split: '</table>' | first | append: '</table>'
       endif
     endif
-  endunless
+  endif
 -%}
 
 {%- if product_resource == blank -%}
