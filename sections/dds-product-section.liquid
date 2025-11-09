@@ -1,0 +1,2062 @@
+{%- comment -%}
+  Design Delight Studio - Product Section
+  Version: 5.0.0 - Shopify 2.0 Modern (2025)
+  Optimized: Performance, Accessibility, Mobile-First, SEO
+  Compatible: Shopify Basic, Atelier 2.1.1
+{%- endcomment -%}
+
+{%- liquid
+  # Product resource with fallbacks
+  assign product_resource = product | default: section.settings.product
+
+  unless product_resource
+    assign product_resource = collection.products.first
+  endunless
+
+  if request.visual_preview_mode and product_resource == blank
+    assign product_resource = collections.all.products.first
+  endunless
+
+  # Current variant
+  assign current_variant = product_resource.selected_or_first_available_variant
+  assign featured_media = current_variant.featured_media | default: product_resource.featured_media
+
+  # Generate unique IDs
+  assign section_id = section.id
+  assign product_form_id = 'product-form-' | append: section_id
+
+  # Calculate savings
+  assign has_discount = false
+  assign savings_percent = 0
+
+  if current_variant.compare_at_price > current_variant.price
+    assign has_discount = true
+    assign savings = current_variant.compare_at_price | minus: current_variant.price
+    assign savings_percent = savings | times: 100.0 | divided_by: current_variant.compare_at_price | round
+  endif
+
+  # Free shipping eligibility
+  assign has_free_shipping = false
+  assign free_shipping_tags = 'organic,GOTS,recycled,GRS,sustainable'
+  assign tag_array = free_shipping_tags | split: ','
+
+  for tag in tag_array
+    if product_resource.tags contains tag
+      assign has_free_shipping = true
+      break
+    endif
+  endfor
+
+  # Extract size guide from metafield or description
+  assign size_guide_content = product_resource.metafields.custom.size_guide
+
+  unless size_guide_content
+    if product_resource.description contains 'SIZE GUIDE'
+      assign desc_parts = product_resource.description | split: 'SIZE GUIDE'
+      if desc_parts.size > 1
+        assign size_guide_content = desc_parts[1] | split: '</table>' | first | append: '</table>'
+      endif
+    endif
+  endunless
+-%}
+
+{%- if product_resource == blank -%}
+  <div class="dds-product-empty" style="padding: 60px 20px; text-align: center;">
+    <p>{{ 'products.product.no_product' | t | default: 'Product not found. Please select a product in theme customizer.' }}</p>
+  </div>
+{%- else -%}
+
+{%- style -%}
+  #shopify-section-{{ section_id }} {
+    --dds-primary: {{ section.settings.primary_color }};
+    --dds-accent: {{ section.settings.accent_color }};
+    --dds-eco: {{ section.settings.eco_green }};
+    --dds-text: {{ section.settings.text_color }};
+    --dds-bg: #ffffff;
+    --dds-surface: #fafafa;
+    --dds-border: #e5e5e5;
+    --dds-radius: 8px;
+    --dds-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --dds-shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+    --dds-shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+    --dds-transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+    --dds-spacing: clamp(20px, 4vw, 40px);
+  }
+
+  .dds-product {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--dds-spacing);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Free Shipping Banner */
+  .dds-shipping-banner {
+    background: linear-gradient(135deg, var(--dds-eco) 0%, #16a34a 100%);
+    color: white;
+    padding: 14px 20px;
+    text-align: center;
+    margin: calc(var(--dds-spacing) * -1) calc(var(--dds-spacing) * -1) var(--dds-spacing);
+    font-weight: 700;
+    font-size: clamp(12px, 2vw, 15px);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    animation: dds-slide-down 0.4s ease-out;
+  }
+
+  @keyframes dds-slide-down {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* Grid Layout */
+  .dds-product__grid {
+    display: grid;
+    gap: clamp(30px, 5vw, 60px);
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  @media (min-width: 768px) {
+    .dds-product__grid {
+      grid-template-columns: 1.2fr 1fr;
+    }
+  }
+
+  /* Media Gallery */
+  .dds-media {
+    position: relative;
+  }
+
+  @media (min-width: 768px) {
+    .dds-media {
+      position: sticky;
+      top: 20px;
+    }
+  }
+
+  .dds-media__main {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/5;
+    border-radius: var(--dds-radius);
+    overflow: hidden;
+    background: var(--dds-surface);
+  }
+
+  .dds-media__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+  }
+
+  .dds-media__main:hover .dds-media__image {
+    transform: scale(1.05);
+  }
+
+  /* Badges */
+  .dds-badge {
+    position: absolute;
+    padding: 8px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    z-index: 2;
+    box-shadow: var(--dds-shadow-md);
+  }
+
+  .dds-badge--shipping {
+    top: 16px;
+    left: 16px;
+    background: var(--dds-eco);
+    color: white;
+    animation: dds-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes dds-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+
+  .dds-badge--sale {
+    top: 16px;
+    right: 16px;
+    background: #ef4444;
+    color: white;
+  }
+
+  /* Thumbnails */
+  .dds-media__thumbs {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    overflow-x: auto;
+    padding: 4px 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--dds-border) transparent;
+  }
+
+  .dds-media__thumbs::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .dds-media__thumbs::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dds-media__thumbs::-webkit-scrollbar-thumb {
+    background: var(--dds-border);
+    border-radius: 3px;
+  }
+
+  .dds-thumb {
+    flex-shrink: 0;
+    width: 70px;
+    height: 88px;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--dds-transition);
+    background: var(--dds-surface);
+  }
+
+  .dds-thumb:hover,
+  .dds-thumb:focus-visible {
+    border-color: var(--dds-primary);
+    outline: none;
+  }
+
+  .dds-thumb.active {
+    border-color: var(--dds-primary);
+  }
+
+  .dds-thumb__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Product Info */
+  .dds-info__header {
+    margin-bottom: 20px;
+  }
+
+  .dds-info__vendor {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--dds-text);
+    opacity: 0.6;
+    margin-bottom: 8px;
+  }
+
+  .dds-info__title {
+    font-size: clamp(24px, 4vw, 36px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0 0 16px;
+    color: var(--dds-text);
+    letter-spacing: -0.5px;
+  }
+
+  /* Certifications */
+  .dds-certs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--dds-border);
+    margin-bottom: 20px;
+  }
+
+  .dds-cert {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--dds-text);
+    opacity: 0.8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .dds-cert--featured {
+    color: var(--dds-eco);
+    opacity: 1;
+  }
+
+  /* Price */
+  .dds-price {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .dds-price__current {
+    font-size: clamp(28px, 4vw, 36px);
+    font-weight: 300;
+    color: var(--dds-text);
+    letter-spacing: -1px;
+  }
+
+  .dds-price__compare {
+    font-size: 20px;
+    color: var(--dds-text);
+    opacity: 0.4;
+    text-decoration: line-through;
+  }
+
+  .dds-price__badge {
+    background: #ef4444;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  /* Shipping Highlight */
+  .dds-shipping-box {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 2px solid var(--dds-eco);
+    border-radius: var(--dds-radius);
+    padding: 16px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dds-shipping-box__icon {
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+
+  .dds-shipping-box__title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #166534;
+    margin: 0 0 4px;
+  }
+
+  .dds-shipping-box__text {
+    font-size: 13px;
+    color: #166534;
+    margin: 0;
+  }
+
+  /* Sustainability */
+  .dds-sustainability {
+    background: var(--dds-surface);
+    border: 1px solid var(--dds-border);
+    border-radius: var(--dds-radius);
+    padding: 16px;
+    margin-bottom: 24px;
+  }
+
+  .dds-sustainability__title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--dds-text);
+    margin: 0 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dds-sustainability__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    color: var(--dds-text);
+    line-height: 1.7;
+  }
+
+  .dds-sustainability__item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  /* Variant Picker */
+  .dds-variants {
+    margin: 24px 0;
+  }
+
+  .dds-variant {
+    margin-bottom: 24px;
+  }
+
+  .dds-variant__label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--dds-text);
+    margin-bottom: 12px;
+  }
+
+  .dds-variant__selected {
+    font-weight: 400;
+    opacity: 0.7;
+  }
+
+  /* Size Buttons */
+  .dds-sizes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(65px, 1fr));
+    gap: 8px;
+  }
+
+  .dds-size {
+    padding: 12px 10px;
+    border: 2px solid var(--dds-border);
+    background: white;
+    color: var(--dds-text);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--dds-transition);
+    text-align: center;
+    border-radius: 4px;
+  }
+
+  .dds-size:hover:not(:disabled),
+  .dds-size:focus-visible {
+    border-color: var(--dds-primary);
+    outline: none;
+    transform: translateY(-2px);
+  }
+
+  .dds-size.active {
+    border-color: var(--dds-primary);
+    background: var(--dds-primary);
+    color: white;
+  }
+
+  .dds-size:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    text-decoration: line-through;
+  }
+
+  /* Color Swatches */
+  .dds-colors {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .dds-color {
+    width: 44px;
+    height: 44px;
+    border: 3px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: var(--dds-transition);
+    position: relative;
+    padding: 0;
+    background: transparent;
+  }
+
+  .dds-color:hover,
+  .dds-color:focus-visible {
+    transform: scale(1.1);
+    outline: none;
+  }
+
+  .dds-color.active {
+    border-color: var(--dds-primary);
+    box-shadow: 0 0 0 1px white, 0 0 0 4px var(--dds-primary);
+  }
+
+  .dds-color__swatch {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+  }
+
+  /* Quantity */
+  .dds-quantity {
+    margin: 24px 0;
+  }
+
+  .dds-quantity__label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--dds-text);
+    margin-bottom: 12px;
+  }
+
+  .dds-quantity__selector {
+    display: inline-flex;
+    border: 2px solid var(--dds-border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .dds-quantity__btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: white;
+    color: var(--dds-text);
+    font-size: 18px;
+    cursor: pointer;
+    transition: var(--dds-transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dds-quantity__btn:hover,
+  .dds-quantity__btn:focus-visible {
+    background: var(--dds-surface);
+    outline: none;
+  }
+
+  .dds-quantity__input {
+    width: 60px;
+    height: 40px;
+    border: none;
+    border-left: 2px solid var(--dds-border);
+    border-right: 2px solid var(--dds-border);
+    text-align: center;
+    font-size: 15px;
+    font-weight: 500;
+    -moz-appearance: textfield;
+  }
+
+  .dds-quantity__input::-webkit-outer-spin-button,
+  .dds-quantity__input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Add to Cart */
+  .dds-cta {
+    margin: 32px 0;
+  }
+
+  .dds-btn {
+    width: 100%;
+    padding: 16px 32px;
+    background: var(--dds-primary);
+    color: white;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: var(--dds-transition);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .dds-btn:hover:not(:disabled),
+  .dds-btn:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: var(--dds-shadow-lg);
+    outline: 2px solid var(--dds-primary);
+    outline-offset: 2px;
+  }
+
+  .dds-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .dds-btn--loading {
+    color: transparent;
+    pointer-events: none;
+  }
+
+  .dds-btn--loading::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    top: 50%;
+    left: 50%;
+    margin: -10px 0 0 -10px;
+    border: 2px solid white;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: dds-spin 0.6s linear infinite;
+  }
+
+  @keyframes dds-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .dds-divider {
+    text-align: center;
+    margin: 16px 0;
+    font-size: 12px;
+    color: var(--dds-text);
+    opacity: 0.5;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* Features */
+  .dds-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin: 32px 0;
+    padding-top: 32px;
+    border-top: 1px solid var(--dds-border);
+  }
+
+  .dds-feature {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--dds-text);
+  }
+
+  .dds-feature--highlight {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    padding: 12px;
+    border-radius: var(--dds-radius);
+    border: 1px solid #86efac;
+  }
+
+  .dds-feature__icon {
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  .dds-feature__title {
+    font-weight: 600;
+    display: block;
+    line-height: 1.3;
+  }
+
+  .dds-feature__desc {
+    opacity: 0.7;
+    font-size: 11px;
+    display: block;
+  }
+
+  /* Accordion */
+  .dds-accordion {
+    margin-top: 32px;
+    border-top: 1px solid var(--dds-border);
+  }
+
+  .dds-accordion__item {
+    border-bottom: 1px solid var(--dds-border);
+  }
+
+  .dds-accordion__trigger {
+    width: 100%;
+    padding: 18px 0;
+    background: none;
+    border: none;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--dds-text);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: var(--dds-transition);
+  }
+
+  .dds-accordion__trigger:hover,
+  .dds-accordion__trigger:focus-visible {
+    opacity: 0.7;
+    outline: none;
+  }
+
+  .dds-accordion__icon {
+    transition: transform 0.3s ease;
+    font-size: 12px;
+  }
+
+  .dds-accordion__trigger[aria-expanded="true"] .dds-accordion__icon {
+    transform: rotate(180deg);
+  }
+
+  .dds-accordion__content {
+    padding: 0 0 18px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--dds-text);
+    opacity: 0.85;
+    display: none;
+  }
+
+  .dds-accordion__content.active {
+    display: block;
+  }
+
+  .dds-accordion__content ul {
+    margin: 10px 0;
+    padding-left: 20px;
+  }
+
+  .dds-accordion__content li {
+    margin-bottom: 6px;
+  }
+
+  /* Size Guide Modal */
+  .dds-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 9999;
+    padding: 20px;
+    overflow-y: auto;
+    animation: dds-fade-in 0.2s ease;
+  }
+
+  @keyframes dds-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .dds-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .dds-modal__content {
+    background: white;
+    border-radius: var(--dds-radius);
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    animation: dds-scale-in 0.3s ease;
+  }
+
+  @keyframes dds-scale-in {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .dds-modal__header {
+    padding: 20px;
+    border-bottom: 1px solid var(--dds-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+  }
+
+  .dds-modal__title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .dds-modal__close {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--dds-surface);
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--dds-transition);
+  }
+
+  .dds-modal__close:hover,
+  .dds-modal__close:focus-visible {
+    background: var(--dds-border);
+    outline: none;
+  }
+
+  .dds-modal__body {
+    padding: 20px;
+  }
+
+  .dds-modal__body table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .dds-modal__body th,
+  .dds-modal__body td {
+    padding: 12px;
+    border: 1px solid var(--dds-border);
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .dds-modal__body th {
+    background: var(--dds-surface);
+    font-weight: 600;
+  }
+
+  .dds-size-guide-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--dds-primary);
+    text-decoration: underline;
+    margin-top: 10px;
+    cursor: pointer;
+    font-weight: 500;
+    background: none;
+    border: none;
+    padding: 0;
+    transition: var(--dds-transition);
+  }
+
+  .dds-size-guide-link:hover,
+  .dds-size-guide-link:focus-visible {
+    opacity: 0.7;
+    outline: none;
+  }
+
+  /* Mobile Sticky */
+  .dds-mobile-sticky {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 2px solid var(--dds-eco);
+    padding: 12px 20px;
+    z-index: 1000;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+  }
+
+  @media (max-width: 767px) {
+    .dds-mobile-sticky {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+  }
+
+  .dds-mobile-sticky.visible {
+    transform: translateY(0);
+  }
+
+  .dds-mobile-sticky__info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .dds-mobile-sticky__price {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dds-text);
+  }
+
+  .dds-mobile-sticky__free {
+    font-size: 11px;
+    color: var(--dds-eco);
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .dds-mobile-sticky__btn {
+    padding: 12px 24px;
+    background: var(--dds-primary);
+    color: white;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* Skip to content for accessibility */
+  .dds-skip {
+    position: absolute;
+    left: -9999px;
+    z-index: 999;
+    padding: 10px;
+    background: var(--dds-primary);
+    color: white;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .dds-skip:focus {
+    left: 50%;
+    transform: translateX(-50%);
+    top: 10px;
+  }
+
+  /* Loading state */
+  .dds-loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  /* Screen reader only */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Focus visible styles for better keyboard navigation */
+  *:focus-visible {
+    outline: 2px solid var(--dds-primary);
+    outline-offset: 2px;
+  }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+{%- endstyle -%}
+
+<a href="#dds-product-info-{{ section_id }}" class="dds-skip">{{ 'accessibility.skip_to_product_info' | t | default: 'Skip to product information' }}</a>
+
+<div class="dds-product">
+
+  {%- if has_free_shipping -%}
+    <div class="dds-shipping-banner" role="banner" aria-label="{{ 'products.product.free_shipping_announcement' | t | default: 'Free shipping announcement' }}">
+      <span aria-hidden="true">🚚</span>
+      <span>{{ 'products.product.free_shipping_banner' | t | default: 'FREE SHIPPING ON ALL ORGANIC & RECYCLED PRODUCTS!' }}</span>
+      <span aria-hidden="true">🌱</span>
+    </div>
+  {%- endif -%}
+
+  <div class="dds-product__grid">
+
+    {%- comment -%} Media Gallery {%- endcomment -%}
+    <div class="dds-media">
+      <div class="dds-media__main">
+
+        {%- if has_free_shipping -%}
+          <span class="dds-badge dds-badge--shipping" aria-label="{{ 'products.product.free_shipping' | t | default: 'Free shipping' }}">
+            {{ 'products.product.free_shipping_short' | t | default: 'FREE SHIPPING' }}
+          </span>
+        {%- endif -%}
+
+        {%- if has_discount -%}
+          <span class="dds-badge dds-badge--sale" aria-label="{{ 'products.product.on_sale' | t | default: 'On sale' }}">
+            {{ savings_percent }}% {{ 'products.product.off' | t | default: 'OFF' }}
+          </span>
+        {%- endif -%}
+
+        {%- if featured_media -%}
+          {{
+            featured_media | image_url: width: 1400 | image_tag:
+            loading: 'eager',
+            fetchpriority: 'high',
+            width: featured_media.width,
+            height: featured_media.height,
+            sizes: '(min-width: 768px) 60vw, 100vw',
+            widths: '400, 600, 800, 1000, 1200, 1400',
+            alt: featured_media.alt | default: product_resource.title | escape,
+            class: 'dds-media__image',
+            id: 'ProductImage-' | append: section_id
+          }}
+        {%- else -%}
+          {{ 'product-1' | placeholder_svg_tag: 'dds-media__image' }}
+        {%- endif -%}
+      </div>
+
+      {%- if product_resource.media.size > 1 -%}
+        <div class="dds-media__thumbs" role="list" aria-label="{{ 'products.product.media.gallery_viewer' | t | default: 'Product image gallery' }}">
+          {%- for media in product_resource.media limit: 8 -%}
+            {%- liquid
+              assign is_active = false
+              if forloop.first
+                assign is_active = true
+              endif
+            -%}
+            <button
+              type="button"
+              class="dds-thumb {% if is_active %}active{% endif %}"
+              data-media-id="{{ media.id }}"
+              data-media-position="{{ forloop.index }}"
+              aria-label="{{ 'products.product.media.load_image' | t: index: forloop.index | default: 'Load image in gallery view' }}"
+              aria-current="{% if is_active %}true{% else %}false{% endif %}"
+              role="listitem"
+            >
+              {{
+                media | image_url: width: 150 | image_tag:
+                loading: 'lazy',
+                width: media.width,
+                height: media.height,
+                sizes: '80px',
+                alt: media.alt | default: product_resource.title | escape,
+                class: 'dds-thumb__image'
+              }}
+            </button>
+          {%- endfor -%}
+        </div>
+      {%- endif -%}
+    </div>
+
+    {%- comment -%} Product Info {%- endcomment -%}
+    <div class="dds-info" id="dds-product-info-{{ section_id }}">
+
+      {%- comment -%} Certifications {%- endcomment -%}
+      {%- liquid
+        assign has_certs = false
+        assign cert_tags = 'GOTS,GRS,OCS,OEKO-TEX,vegan'
+        assign cert_array = cert_tags | split: ','
+
+        for cert in cert_array
+          if product_resource.tags contains cert
+            assign has_certs = true
+            break
+          endif
+        endfor
+      -%}
+
+      {%- if has_certs -%}
+        <div class="dds-certs" role="list" aria-label="{{ 'products.product.certifications' | t | default: 'Product certifications' }}">
+          {%- if product_resource.tags contains 'GOTS' -%}
+            <span class="dds-cert dds-cert--featured" role="listitem">
+              <span aria-hidden="true">✓</span> GOTS {{ 'products.product.certified' | t | default: 'Certified' }}
+            </span>
+          {%- endif -%}
+          {%- if product_resource.tags contains 'GRS' or product_resource.tags contains 'recycled' -%}
+            <span class="dds-cert dds-cert--featured" role="listitem">
+              <span aria-hidden="true">♻️</span> GRS {{ 'products.product.certified' | t | default: 'Certified' }}
+            </span>
+          {%- endif -%}
+          {%- if product_resource.tags contains 'OCS' -%}
+            <span class="dds-cert" role="listitem">
+              <span aria-hidden="true">✓</span> OCS {{ 'products.product.certified' | t | default: 'Certified' }}
+            </span>
+          {%- endif -%}
+          {%- if product_resource.tags contains 'OEKO-TEX' -%}
+            <span class="dds-cert" role="listitem">
+              <span aria-hidden="true">✓</span> OEKO-TEX 100
+            </span>
+          {%- endif -%}
+          {%- if product_resource.tags contains 'vegan' -%}
+            <span class="dds-cert" role="listitem">
+              <span aria-hidden="true">🌱</span> PETA-Approved
+            </span>
+          {%- endif -%}
+        </div>
+      {%- endif -%}
+
+      {%- comment -%} Header {%- endcomment -%}
+      <div class="dds-info__header">
+        {%- if product_resource.vendor != blank -%}
+          <p class="dds-info__vendor">{{ product_resource.vendor }}</p>
+        {%- endif -%}
+
+        <h1 class="dds-info__title">{{ product_resource.title | escape }}</h1>
+      </div>
+
+      {%- comment -%} Price {%- endcomment -%}
+      <div class="dds-price" role="region" aria-label="{{ 'products.product.price' | t | default: 'Price' }}">
+        <span class="dds-price__current" id="ProductPrice-{{ section_id }}">
+          {{ current_variant.price | money_without_trailing_zeros }}
+        </span>
+
+        {%- if has_discount -%}
+          <s class="dds-price__compare" id="ComparePrice-{{ section_id }}">
+            <span class="sr-only">{{ 'products.product.regular_price' | t | default: 'Regular price' }}</span>
+            {{ current_variant.compare_at_price | money_without_trailing_zeros }}
+          </s>
+          <span class="dds-price__badge">{{ savings_percent }}% {{ 'products.product.off' | t | default: 'OFF' }}</span>
+        {%- endif -%}
+      </div>
+
+      {%- comment -%} Free Shipping Highlight {%- endcomment -%}
+      {%- if has_free_shipping -%}
+        <div class="dds-shipping-box" role="region" aria-label="{{ 'products.product.shipping_info' | t | default: 'Shipping information' }}">
+          <span class="dds-shipping-box__icon" aria-hidden="true">🎉</span>
+          <div>
+            <h3 class="dds-shipping-box__title">{{ 'products.product.free_shipping_title' | t | default: 'FREE Shipping Included!' }}</h3>
+            <p class="dds-shipping-box__text">{{ 'products.product.free_shipping_desc' | t | default: 'All organic and recycled products ship FREE worldwide' }}</p>
+          </div>
+        </div>
+      {%- endif -%}
+
+      {%- comment -%} Sustainability {%- endcomment -%}
+      <div class="dds-sustainability">
+        <h3 class="dds-sustainability__title">
+          <span aria-hidden="true">🌍</span> {{ 'products.product.sustainable_materials' | t | default: 'Sustainable Materials' }}
+        </h3>
+        <ul class="dds-sustainability__list">
+          {%- if product_resource.tags contains 'organic' or product_resource.tags contains 'GOTS' -%}
+            <li class="dds-sustainability__item">
+              <span aria-hidden="true">•</span>
+              <span>{{ 'products.product.organic_cotton' | t | default: '100% Organic Cotton - GOTS certified supply chain' }}</span>
+            </li>
+          {%- endif -%}
+          {%- if product_resource.tags contains 'recycled' or product_resource.tags contains 'GRS' -%}
+            <li class="dds-sustainability__item">
+              <span aria-hidden="true">•</span>
+              <span>{{ 'products.product.recycled_materials' | t | default: 'Made from recycled materials - GRS certified' }}</span>
+            </li>
+          {%- endif -%}
+          <li class="dds-sustainability__item">
+            <span aria-hidden="true">•</span>
+            <span>{{ 'products.product.water_based_inks' | t | default: 'Water-based inks using eco-friendly technology' }}</span>
+          </li>
+          <li class="dds-sustainability__item">
+            <span aria-hidden="true">•</span>
+            <span>{{ 'products.product.ethical_manufacturing' | t | default: 'Ethically manufactured in certified facilities' }}</span>
+          </li>
+        </ul>
+      </div>
+
+      {%- comment -%} Product Form {%- endcomment -%}
+      {%- form 'product', product_resource, id: product_form_id, novalidate: 'novalidate', data-type: 'add-to-cart-form' -%}
+
+        <input type="hidden" name="id" value="{{ current_variant.id }}" disabled>
+
+        {%- unless product_resource.has_only_default_variant -%}
+          <div class="dds-variants">
+            {%- for option in product_resource.options_with_values -%}
+              <div class="dds-variant">
+                <fieldset>
+                  <legend class="dds-variant__label">
+                    <span>{{ option.name }}</span>
+                    <span class="dds-variant__selected" id="selected-{{ option.name }}-{{ section_id }}">
+                      {{ option.selected_value }}
+                    </span>
+                  </legend>
+
+                  {%- if option.name == 'Size' -%}
+                    <div class="dds-sizes" role="radiogroup" aria-label="{{ option.name }}">
+                      {%- for value in option.values -%}
+                        {%- liquid
+                          assign is_selected = false
+                          if option.selected_value == value
+                            assign is_selected = true
+                          endif
+
+                          assign variant_available = false
+                          for variant in product_resource.variants
+                            if variant.option1 == value or variant.option2 == value or variant.option3 == value
+                              if variant.available
+                                assign variant_available = true
+                                break
+                              endif
+                            endif
+                          endfor
+                        -%}
+                        <button
+                          type="button"
+                          class="dds-size {% if is_selected %}active{% endif %}"
+                          data-option-position="{{ option.position }}"
+                          data-option-value="{{ value | escape }}"
+                          aria-label="{{ value }}"
+                          aria-pressed="{% if is_selected %}true{% else %}false{% endif %}"
+                          {% unless variant_available %}disabled{% endunless %}
+                        >
+                          {{ value }}
+                        </button>
+                      {%- endfor -%}
+                    </div>
+
+                    {%- if size_guide_content != blank -%}
+                      <button type="button" class="dds-size-guide-link" data-open-size-guide aria-label="{{ 'products.product.size_guide' | t | default: 'Open size guide' }}">
+                        <span aria-hidden="true">📏</span>
+                        <span>{{ 'products.product.view_size_guide' | t | default: 'View Size Guide' }}</span>
+                      </button>
+                    {%- endif -%}
+
+                  {%- elsif option.name == 'Color' or option.name == 'Colour' -%}
+                    <div class="dds-colors" role="radiogroup" aria-label="{{ option.name }}">
+                      {%- for value in option.values -%}
+                        {%- liquid
+                          assign is_selected = false
+                          if option.selected_value == value
+                            assign is_selected = true
+                          endif
+
+                          assign color_handle = value | handle
+                          assign swatch_color = value | split: ' ' | first | downcase
+
+                          case swatch_color
+                            when 'black'
+                              assign color_hex = '#000000'
+                            when 'white'
+                              assign color_hex = '#FFFFFF'
+                            when 'grey' or 'gray'
+                              assign color_hex = '#808080'
+                            when 'heather'
+                              assign color_hex = '#9CA3AF'
+                            when 'navy'
+                              assign color_hex = '#1E3A8A'
+                            when 'red'
+                              assign color_hex = '#DC2626'
+                            when 'green' or 'forest'
+                              assign color_hex = '#15803D'
+                            when 'blue' or 'royal'
+                              assign color_hex = '#2563EB'
+                            when 'pink'
+                              assign color_hex = '#EC4899'
+                            when 'purple'
+                              assign color_hex = '#9333EA'
+                            when 'yellow'
+                              assign color_hex = '#FCD34D'
+                            when 'orange'
+                              assign color_hex = '#FB923C'
+                            else
+                              assign color_hex = '#D1D5DB'
+                          endcase
+                        -%}
+                        <button
+                          type="button"
+                          class="dds-color {% if is_selected %}active{% endif %}"
+                          data-option-position="{{ option.position }}"
+                          data-option-value="{{ value | escape }}"
+                          aria-label="{{ value }}"
+                          aria-pressed="{% if is_selected %}true{% else %}false{% endif %}"
+                        >
+                          <span class="dds-color__swatch" style="background-color: {{ color_hex }}"></span>
+                        </button>
+                      {%- endfor -%}
+                    </div>
+
+                  {%- else -%}
+                    <div class="dds-select-wrapper">
+                      <select
+                        class="dds-select"
+                        name="options[{{ option.name | escape }}]"
+                        id="Option-{{ option.position }}-{{ section_id }}"
+                        aria-label="{{ option.name }}"
+                      >
+                        {%- for value in option.values -%}
+                          <option
+                            value="{{ value | escape }}"
+                            {% if option.selected_value == value %}selected{% endif %}
+                          >
+                            {{ value }}
+                          </option>
+                        {%- endfor -%}
+                      </select>
+                    </div>
+                  {%- endif -%}
+                </fieldset>
+              </div>
+            {%- endfor -%}
+          </div>
+        {%- endunless -%}
+
+        {%- comment -%} Quantity {%- endcomment -%}
+        <div class="dds-quantity">
+          <label class="dds-quantity__label" for="Quantity-{{ section_id }}">
+            {{ 'products.product.quantity.label' | t | default: 'Quantity' }}
+          </label>
+          <div class="dds-quantity__selector">
+            <button
+              type="button"
+              class="dds-quantity__btn"
+              data-qty-minus
+              aria-label="{{ 'products.product.quantity.decrease' | t: title: product_resource.title | default: 'Decrease quantity' }}"
+            >
+              <span aria-hidden="true">−</span>
+            </button>
+            <input
+              type="number"
+              id="Quantity-{{ section_id }}"
+              name="quantity"
+              value="1"
+              min="1"
+              max="10"
+              class="dds-quantity__input"
+              aria-label="{{ 'products.product.quantity.input_label' | t: product: product_resource.title | default: 'Quantity' }}"
+            >
+            <button
+              type="button"
+              class="dds-quantity__btn"
+              data-qty-plus
+              aria-label="{{ 'products.product.quantity.increase' | t: title: product_resource.title | default: 'Increase quantity' }}"
+            >
+              <span aria-hidden="true">+</span>
+            </button>
+          </div>
+        </div>
+
+        {%- comment -%} Add to Cart {%- endcomment -%}
+        <div class="dds-cta">
+          <button
+            type="submit"
+            name="add"
+            class="dds-btn"
+            id="AddToCart-{{ section_id }}"
+            {% unless current_variant.available %}disabled{% endunless %}
+            aria-live="polite"
+          >
+            <span id="AddToCartText-{{ section_id }}">
+              {%- if current_variant.available -%}
+                {{ 'products.product.add_to_cart' | t | default: 'Add to Cart' }}
+              {%- else -%}
+                {{ 'products.product.sold_out' | t | default: 'Sold Out' }}
+              {%- endif -%}
+            </span>
+          </button>
+
+          {%- if section.settings.show_dynamic_checkout -%}
+            <p class="dds-divider">{{ 'products.product.or' | t | default: 'or' }}</p>
+            {{ form | payment_button }}
+          {%- endif -%}
+        </div>
+
+      {%- endform -%}
+
+      {%- comment -%} Features {%- endcomment -%}
+      <div class="dds-features" role="list" aria-label="{{ 'products.product.features' | t | default: 'Product features' }}">
+        {%- if has_free_shipping -%}
+          <div class="dds-feature dds-feature--highlight" role="listitem">
+            <span class="dds-feature__icon" aria-hidden="true">🚚</span>
+            <div>
+              <span class="dds-feature__title">{{ 'products.product.feature_shipping_title' | t | default: 'FREE Worldwide Shipping' }}</span>
+              <span class="dds-feature__desc">{{ 'products.product.feature_shipping_desc' | t | default: 'On all organic & recycled items' }}</span>
+            </div>
+          </div>
+        {%- endif -%}
+        <div class="dds-feature" role="listitem">
+          <span class="dds-feature__icon" aria-hidden="true">↩️</span>
+          <div>
+            <span class="dds-feature__title">{{ 'products.product.feature_returns_title' | t | default: '30-Day Returns' }}</span>
+            <span class="dds-feature__desc">{{ 'products.product.feature_returns_desc' | t | default: 'Hassle-free returns' }}</span>
+          </div>
+        </div>
+        <div class="dds-feature" role="listitem">
+          <span class="dds-feature__icon" aria-hidden="true">🌱</span>
+          <div>
+            <span class="dds-feature__title">{{ 'products.product.feature_carbon_title' | t | default: 'Carbon Neutral' }}</span>
+            <span class="dds-feature__desc">{{ 'products.product.feature_carbon_desc' | t | default: 'Offset shipping' }}</span>
+          </div>
+        </div>
+        <div class="dds-feature" role="listitem">
+          <span class="dds-feature__icon" aria-hidden="true">💚</span>
+          <div>
+            <span class="dds-feature__title">{{ 'products.product.feature_planet_title' | t | default: '1% for Planet' }}</span>
+            <span class="dds-feature__desc">{{ 'products.product.feature_planet_desc' | t | default: 'Member since 2021' }}</span>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Accordion Details {%- endcomment -%}
+      <div class="dds-accordion">
+        <div class="dds-accordion__item">
+          <button
+            type="button"
+            class="dds-accordion__trigger"
+            aria-expanded="false"
+            aria-controls="details-{{ section_id }}"
+            id="trigger-details-{{ section_id }}"
+          >
+            <span>{{ 'products.product.details_title' | t | default: 'Product Details' }}</span>
+            <span class="dds-accordion__icon" aria-hidden="true">▼</span>
+          </button>
+          <div
+            class="dds-accordion__content"
+            id="details-{{ section_id }}"
+            role="region"
+            aria-labelledby="trigger-details-{{ section_id }}"
+          >
+            {%- if product_resource.description != blank -%}
+              {{ product_resource.description | split: 'SIZE GUIDE' | first | split: 'Size Guide' | first }}
+            {%- else -%}
+              <p>{{ 'products.product.details_default' | t | default: 'Premium quality garment made with certified organic materials.' }}</p>
+            {%- endif -%}
+          </div>
+        </div>
+
+        <div class="dds-accordion__item">
+          <button
+            type="button"
+            class="dds-accordion__trigger"
+            aria-expanded="false"
+            aria-controls="care-{{ section_id }}"
+            id="trigger-care-{{ section_id }}"
+          >
+            <span>{{ 'products.product.care_title' | t | default: 'Material & Care' }}</span>
+            <span class="dds-accordion__icon" aria-hidden="true">▼</span>
+          </button>
+          <div
+            class="dds-accordion__content"
+            id="care-{{ section_id }}"
+            role="region"
+            aria-labelledby="trigger-care-{{ section_id }}"
+          >
+            {%- if product_resource.tags contains 'organic' or product_resource.tags contains 'GOTS' -%}
+              <p><strong>{{ 'products.product.material' | t | default: 'Material' }}:</strong> 100% {{ 'products.product.organic_cotton_short' | t | default: 'Organic Cotton' }} (GOTS {{ 'products.product.certified' | t | default: 'Certified' }})</p>
+            {%- elsif product_resource.tags contains 'recycled' -%}
+              <p><strong>{{ 'products.product.material' | t | default: 'Material' }}:</strong> {{ 'products.product.recycled_blend' | t | default: 'Recycled Materials' }} (GRS {{ 'products.product.certified' | t | default: 'Certified' }})</p>
+            {%- endif -%}
+            <p><strong>{{ 'products.product.care' | t | default: 'Care' }}:</strong> {{ 'products.product.care_instructions' | t | default: 'Machine wash cold, tumble dry low. Do not bleach.' }}</p>
+          </div>
+        </div>
+
+        <div class="dds-accordion__item">
+          <button
+            type="button"
+            class="dds-accordion__trigger"
+            aria-expanded="false"
+            aria-controls="shipping-{{ section_id }}"
+            id="trigger-shipping-{{ section_id }}"
+          >
+            <span>{{ 'products.product.shipping_title' | t | default: 'Shipping & Returns' }}</span>
+            <span class="dds-accordion__icon" aria-hidden="true">▼</span>
+          </button>
+          <div
+            class="dds-accordion__content"
+            id="shipping-{{ section_id }}"
+            role="region"
+            aria-labelledby="trigger-shipping-{{ section_id }}"
+          >
+            {%- if has_free_shipping -%}
+              <p><strong>🎉 {{ 'products.product.free_shipping' | t | default: 'FREE SHIPPING' }}:</strong> {{ 'products.product.free_shipping_detail' | t | default: 'This product ships FREE worldwide!' }}</p>
+            {%- endif -%}
+            <p><strong>{{ 'products.product.processing' | t | default: 'Processing' }}:</strong> {{ 'products.product.processing_time' | t | default: '1-3 business days' }}</p>
+            <p><strong>{{ 'products.product.delivery' | t | default: 'Delivery' }}:</strong> {{ 'products.product.delivery_time' | t | default: 'Standard 3-5 business days' }}</p>
+            <p><strong>{{ 'products.product.returns' | t | default: 'Returns' }}:</strong> {{ 'products.product.returns_policy' | t | default: '30-day return policy for unworn items' }}</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{%- comment -%} Size Guide Modal {%- endcomment -%}
+{%- if size_guide_content != blank -%}
+  <div class="dds-modal" id="SizeGuideModal-{{ section_id }}" role="dialog" aria-labelledby="SizeGuideTitle-{{ section_id }}" aria-modal="true">
+    <div class="dds-modal__content">
+      <div class="dds-modal__header">
+        <h2 class="dds-modal__title" id="SizeGuideTitle-{{ section_id }}">{{ 'products.product.size_guide' | t | default: 'Size Guide' }}</h2>
+        <button
+          type="button"
+          class="dds-modal__close"
+          data-close-size-guide
+          aria-label="{{ 'accessibility.close' | t | default: 'Close' }}"
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div class="dds-modal__body">
+        {{ size_guide_content }}
+      </div>
+    </div>
+  </div>
+{%- endif -%}
+
+{%- comment -%} Mobile Sticky Bar {%- endcomment -%}
+<div class="dds-mobile-sticky" id="MobileSticky-{{ section_id }}" aria-hidden="true">
+  <div class="dds-mobile-sticky__info">
+    <span class="dds-mobile-sticky__price">{{ current_variant.price | money_without_trailing_zeros }}</span>
+    {%- if has_free_shipping -%}
+      <span class="dds-mobile-sticky__free">✓ {{ 'products.product.free_shipping' | t | default: 'FREE SHIPPING' }}</span>
+    {%- endif -%}
+  </div>
+  <button type="button" class="dds-mobile-sticky__btn" data-mobile-add>
+    {{ 'products.product.add_to_cart' | t | default: 'Add to Cart' }}
+  </button>
+</div>
+
+{%- comment -%} JavaScript {%- endcomment -%}
+<script>
+if (!window.DDSProduct) {
+  window.DDSProduct = {};
+}
+
+window.DDSProduct['{{ section_id }}'] = (function() {
+  'use strict';
+
+  const sectionId = '{{ section_id }}';
+  const hasFreeShipping = {{ has_free_shipping | json }};
+
+  // Product data
+  const productData = {
+    id: {{ product_resource.id | json }},
+    variants: {{ product_resource.variants | json }},
+    options: {{ product_resource.options_with_values | json }}
+  };
+
+  // DOM cache
+  const dom = {};
+
+  // State
+  let currentVariantId = {{ current_variant.id | json }};
+
+  // Initialize
+  function init() {
+    cacheDom();
+    bindEvents();
+    updateMobileSticky();
+  }
+
+  // Cache DOM elements
+  function cacheDom() {
+    dom.form = document.getElementById('product-form-' + sectionId);
+    dom.variantIdInput = dom.form?.querySelector('input[name="id"]');
+    dom.priceElement = document.getElementById('ProductPrice-' + sectionId);
+    dom.comparePriceElement = document.getElementById('ComparePrice-' + sectionId);
+    dom.addToCartBtn = document.getElementById('AddToCart-' + sectionId);
+    dom.addToCartText = document.getElementById('AddToCartText-' + sectionId);
+    dom.productImage = document.getElementById('ProductImage-' + sectionId);
+    dom.quantityInput = document.getElementById('Quantity-' + sectionId);
+    dom.mobileSticky = document.getElementById('MobileSticky-' + sectionId);
+    dom.sizeGuideModal = document.getElementById('SizeGuideModal-' + sectionId);
+  }
+
+  // Bind events
+  function bindEvents() {
+    // Variant selectors
+    const sizeButtons = document.querySelectorAll('.dds-size');
+    sizeButtons.forEach(btn => {
+      btn.addEventListener('click', handleVariantChange);
+    });
+
+    const colorButtons = document.querySelectorAll('.dds-color');
+    colorButtons.forEach(btn => {
+      btn.addEventListener('click', handleVariantChange);
+    });
+
+    // Quantity controls
+    const qtyMinus = document.querySelector('[data-qty-minus]');
+    const qtyPlus = document.querySelector('[data-qty-plus]');
+
+    if (qtyMinus) qtyMinus.addEventListener('click', decreaseQuantity);
+    if (qtyPlus) qtyPlus.addEventListener('click', increaseQuantity);
+
+    // Form submission
+    if (dom.form) {
+      dom.form.addEventListener('submit', handleSubmit);
+    }
+
+    // Thumbnails
+    const thumbs = document.querySelectorAll('.dds-thumb');
+    thumbs.forEach(thumb => {
+      thumb.addEventListener('click', handleThumbnailClick);
+    });
+
+    // Accordion
+    const accordionTriggers = document.querySelectorAll('.dds-accordion__trigger');
+    accordionTriggers.forEach(trigger => {
+      trigger.addEventListener('click', handleAccordionClick);
+    });
+
+    // Size guide modal
+    if (dom.sizeGuideModal) {
+      const openBtn = document.querySelector('[data-open-size-guide]');
+      const closeBtn = document.querySelector('[data-close-size-guide]');
+
+      if (openBtn) openBtn.addEventListener('click', openSizeGuide);
+      if (closeBtn) closeBtn.addEventListener('click', closeSizeGuide);
+
+      dom.sizeGuideModal.addEventListener('click', handleModalBackdropClick);
+
+      // ESC key to close
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    // Mobile sticky
+    const mobileAddBtn = document.querySelector('[data-mobile-add]');
+    if (mobileAddBtn) {
+      mobileAddBtn.addEventListener('click', () => {
+        if (dom.form) {
+          dom.form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        }
+      });
+    }
+
+    // Intersection observer for mobile sticky
+    if (dom.addToCartBtn && 'IntersectionObserver' in window) {
+      const observer = new IntersectionObserver(handleButtonVisibility, {
+        threshold: 0,
+        rootMargin: '0px'
+      });
+      observer.observe(dom.addToCartBtn);
+    }
+  }
+
+  // Handle variant change
+  function handleVariantChange(e) {
+    e.preventDefault();
+
+    const button = e.currentTarget;
+    const optionPosition = parseInt(button.dataset.optionPosition);
+    const optionValue = button.dataset.optionValue;
+
+    // Update UI
+    const siblings = button.parentElement.querySelectorAll('[data-option-position="' + optionPosition + '"]');
+    siblings.forEach(sib => {
+      sib.classList.remove('active');
+      sib.setAttribute('aria-pressed', 'false');
+    });
+    button.classList.add('active');
+    button.setAttribute('aria-pressed', 'true');
+
+    // Update selected value display
+    const optionName = productData.options[optionPosition - 1]?.name;
+    if (optionName) {
+      const selectedSpan = document.getElementById('selected-' + optionName + '-' + sectionId);
+      if (selectedSpan) selectedSpan.textContent = optionValue;
+    }
+
+    // Get selected options
+    const selectedOptions = getSelectedOptions();
+
+    // Find matching variant
+    const variant = findVariant(selectedOptions);
+
+    if (variant) {
+      updateVariant(variant);
+    }
+  }
+
+  // Get currently selected options
+  function getSelectedOptions() {
+    const options = [];
+
+    for (let i = 1; i <= productData.options.length; i++) {
+      const activeBtn = document.querySelector('[data-option-position="' + i + '"].active');
+      if (activeBtn) {
+        options.push(activeBtn.dataset.optionValue);
+      } else {
+        // Fallback to select if exists
+        const select = document.getElementById('Option-' + i + '-' + sectionId);
+        if (select) {
+          options.push(select.value);
+        }
+      }
+    }
+
+    return options;
+  }
+
+  // Find variant by options
+  function findVariant(options) {
+    return productData.variants.find(variant => {
+      return options.every((option, index) => {
+        return variant['option' + (index + 1)] === option;
+      });
+    });
+  }
+
+  // Update variant
+  function updateVariant(variant) {
+    currentVariantId = variant.id;
+
+    // Update hidden input
+    if (dom.variantIdInput) {
+      dom.variantIdInput.value = variant.id;
+      dom.variantIdInput.disabled = false;
+    }
+
+    // Update price
+    if (dom.priceElement) {
+      dom.priceElement.textContent = formatMoney(variant.price);
+    }
+
+    // Update compare price
+    if (dom.comparePriceElement) {
+      const priceContainer = dom.comparePriceElement.parentElement;
+      if (variant.compare_at_price && variant.compare_at_price > variant.price) {
+        dom.comparePriceElement.textContent = formatMoney(variant.compare_at_price);
+        dom.comparePriceElement.style.display = '';
+
+        // Update sale badge
+        const badge = priceContainer.querySelector('.dds-price__badge');
+        if (badge) {
+          const savings = Math.round(((variant.compare_at_price - variant.price) / variant.compare_at_price) * 100);
+          badge.textContent = savings + '% {{ 'products.product.off' | t | default: 'OFF' }}';
+          badge.style.display = '';
+        }
+      } else {
+        dom.comparePriceElement.style.display = 'none';
+        const badge = priceContainer.querySelector('.dds-price__badge');
+        if (badge) badge.style.display = 'none';
+      }
+    }
+
+    // Update button
+    if (dom.addToCartBtn && dom.addToCartText) {
+      if (variant.available) {
+        dom.addToCartBtn.disabled = false;
+        dom.addToCartText.textContent = '{{ 'products.product.add_to_cart' | t | default: 'Add to Cart' }}';
+      } else {
+        dom.addToCartBtn.disabled = true;
+        dom.addToCartText.textContent = '{{ 'products.product.sold_out' | t | default: 'Sold Out' }}';
+      }
+    }
+
+    // Update mobile sticky
+    const mobilePrice = document.querySelector('.dds-mobile-sticky__price');
+    if (mobilePrice) {
+      mobilePrice.textContent = formatMoney(variant.price);
+    }
+
+    // Update image if variant has featured media
+    if (variant.featured_media && dom.productImage) {
+      const newSrc = variant.featured_media.preview_image.src.replace(/\?.*$/, '') + '?width=1400';
+      dom.productImage.src = newSrc;
+      dom.productImage.srcset = generateSrcset(variant.featured_media.preview_image.src);
+      dom.productImage.alt = variant.featured_media.alt || '{{ product_resource.title | escape }}';
+    }
+
+    // Update URL
+    updateURL(variant);
+  }
+
+  // Format money
+  function formatMoney(cents) {
+    const amount = (cents / 100).toFixed(2);
+    return '{{ cart.currency.symbol }}' + amount.replace(/\.00$/, '');
+  }
+
+  // Generate srcset
+  function generateSrcset(baseSrc) {
+    const base = baseSrc.replace(/\?.*$/, '');
+    return [400, 600, 800, 1000, 1200, 1400]
+      .map(width => base + '?width=' + width + ' ' + width + 'w')
+      .join(', ');
+  }
+
+  // Update URL without reload
+  function updateURL(variant) {
+    if (!variant || !window.history.replaceState) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('variant', variant.id);
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  // Quantity controls
+  function decreaseQuantity(e) {
+    e.preventDefault();
+    if (!dom.quantityInput) return;
+
+    const current = parseInt(dom.quantityInput.value) || 1;
+    if (current > 1) {
+      dom.quantityInput.value = current - 1;
+    }
+  }
+
+  function increaseQuantity(e) {
+    e.preventDefault();
+    if (!dom.quantityInput) return;
+
+    const current = parseInt(dom.quantityInput.value) || 1;
+    const max = parseInt(dom.quantityInput.max) || 10;
+    if (current < max) {
+      dom.quantityInput.value = current + 1;
+    }
+  }
+
+  // Form submission
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    if (!dom.addToCartBtn || !dom.addToCartText) return;
+
+    const originalText = dom.addToCartText.textContent;
+
+    // Loading state
+    dom.addToCartBtn.classList.add('dds-btn--loading');
+    dom.addToCartBtn.disabled = true;
+
+    try {
+      const formData = new FormData(dom.form);
+
+      const response = await fetch('/cart/add.js', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add to cart');
+      }
+
+      const data = await response.json();
+
+      // Success
+      dom.addToCartBtn.classList.remove('dds-btn--loading');
+      dom.addToCartText.textContent = '✓ {{ 'products.product.added_to_cart' | t | default: 'Added to Cart' }}';
+
+      // Update cart drawer/count if exists
+      if (window.theme && typeof window.theme.updateCart === 'function') {
+        window.theme.updateCart();
+      }
+
+      // Dispatch custom event
+      document.dispatchEvent(new CustomEvent('cart:item-added', {
+        detail: data
+      }));
+
+      // Reset button
+      setTimeout(() => {
+        dom.addToCartBtn.disabled = false;
+        dom.addToCartText.textContent = originalText;
+      }, 2000);
+
+    } catch (error) {
+      console.error('Add to cart error:', error);
+
+      dom.addToCartBtn.classList.remove('dds-btn--loading');
+      dom.addToCartText.textContent = '{{ 'products.product.error' | t | default: 'Error - Try Again' }}';
+
+      setTimeout(() => {
+        dom.addToCartBtn.disabled = false;
+        dom.addToCartText.textContent = originalText;
+      }, 2000);
+    }
+  }
+
+  // Thumbnail click
+  function handleThumbnailClick(e) {
+    e.preventDefault();
+
+    const thumb = e.currentTarget;
+    const mediaPosition = parseInt(thumb.dataset.mediaPosition);
+
+    // Update active state
+    const allThumbs = document.querySelectorAll('.dds-thumb');
+    allThumbs.forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-current', 'false');
+    });
+    thumb.classList.add('active');
+    thumb.setAttribute('aria-current', 'true');
+
+    // Update main image
+    if (dom.productImage) {
+      const img = thumb.querySelector('.dds-thumb__image');
+      if (img) {
+        const newSrc = img.src.replace(/width=\d+/, 'width=1400');
+        dom.productImage.src = newSrc;
+        dom.productImage.srcset = generateSrcset(newSrc);
+        dom.productImage.alt = img.alt;
+      }
+    }
+  }
+
+  // Accordion
+  function handleAccordionClick(e) {
+    const trigger = e.currentTarget;
+    const content = trigger.nextElementSibling;
+    const isOpen = trigger.getAttribute('aria-expanded') === 'true';
+
+    // Close all
+    document.querySelectorAll('.dds-accordion__trigger').forEach(t => {
+      t.setAttribute('aria-expanded', 'false');
+      if (t.nextElementSibling) {
+        t.nextElementSibling.classList.remove('active');
+      }
+    });
+
+    // Open clicked if was closed
+    if (!isOpen) {
+      trigger.setAttribute('aria-expanded', 'true');
+      content.classList.add('active');
+    }
+  }
+
+  // Size guide modal
+  function openSizeGuide(e) {
+    e.preventDefault();
+    if (!dom.sizeGuideModal) return;
+
+    dom.sizeGuideModal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Focus close button for accessibility
+    const closeBtn = dom.sizeGuideModal.querySelector('[data-close-size-guide]');
+    if (closeBtn) {
+      setTimeout(() => closeBtn.focus(), 100);
+    }
+  }
+
+  function closeSizeGuide() {
+    if (!dom.sizeGuideModal) return;
+
+    dom.sizeGuideModal.classList.remove('active');
+    document.body.style.overflow = '';
+
+    // Return focus to trigger
+    const openBtn = document.querySelector('[data-open-size-guide]');
+    if (openBtn) openBtn.focus();
+  }
+
+  function handleModalBackdropClick(e) {
+    if (e.target === dom.sizeGuideModal) {
+      closeSizeGuide();
+    }
+  }
+
+  function handleEscapeKey(e) {
+    if (e.key === 'Escape' && dom.sizeGuideModal?.classList.contains('active')) {
+      closeSizeGuide();
+    }
+  }
+
+  // Mobile sticky visibility
+  function handleButtonVisibility(entries) {
+    entries.forEach(entry => {
+      if (dom.mobileSticky && window.innerWidth <= 767) {
+        if (!entry.isIntersecting) {
+          dom.mobileSticky.classList.add('visible');
+          dom.mobileSticky.setAttribute('aria-hidden', 'false');
+        } else {
+          dom.mobileSticky.classList.remove('visible');
+          dom.mobileSticky.setAttribute('aria-hidden', 'true');
+        }
+      }
+    });
+  }
+
+  function updateMobileSticky() {
+    if (!dom.mobileSticky) return;
+
+    const handleResize = () => {
+      if (window.innerWidth > 767) {
+        dom.mobileSticky.classList.remove('visible');
+        dom.mobileSticky.setAttribute('aria-hidden', 'true');
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+  }
+
+  // Public API
+  return {
+    init,
+    updateVariant
+  };
+
+})();
+
+// Auto-initialize
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function() {
+    window.DDSProduct['{{ section_id }}'].init();
+  });
+} else {
+  window.DDSProduct['{{ section_id }}'].init();
+}
+</script>
+
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "DDS Product Section",
+  "tag": "section",
+  "class": "section-dds-product",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Product Settings"
+    },
+    {
+      "type": "product",
+      "id": "product",
+      "label": "Product",
+      "info": "Select a product for theme editor preview"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_dynamic_checkout",
+      "label": "Show dynamic checkout buttons",
+      "info": "Displays Apple Pay, Google Pay, PayPal, etc.",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Brand Colors"
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary color",
+      "default": "#000000"
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Accent color",
+      "default": "#1a1a1a"
+    },
+    {
+      "type": "color",
+      "id": "eco_green",
+      "label": "Eco/sustainability color",
+      "default": "#22c55e",
+      "info": "Used for free shipping and sustainability features"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#1a1a1a"
+    }
+  ],
+  "presets": [
+    {
+      "name": "DDS Product Section",
+      "category": "Product"
+    }
+  ],
+  "enabled_on": {
+    "templates": ["product"]
+  }
+}
+{% endschema %}
